@@ -249,7 +249,7 @@ class Tokenizer(nn.Module):
       nn.init.kaiming_normal_(m.weight)
 
 
-class CCT(nn.Module):
+class CCT_torch(nn.Module):
   def __init__(self,
          img_size=224,
          embedding_dim=768,
@@ -270,7 +270,7 @@ class CCT(nn.Module):
          num_classes=1000,
          positional_embedding='learnable',
          *args, **kwargs):
-    super(CCT, self).__init__()
+    super(CCT_torch, self).__init__()
 
     self.tokenizer = Tokenizer(n_input_channels=n_input_channels,
                    n_output_channels=embedding_dim,
