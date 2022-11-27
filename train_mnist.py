@@ -12,7 +12,7 @@ class MNIST(pl.LightningDataModule):
 
   """
   TODO
-    - image transoformation: normalization + augmentation
+    - image transoformation: augmentation
     - use AdamW
   """
 
@@ -61,6 +61,12 @@ class CCT(pl.LightningModule):
     x, y = batch
     y_pred = self.cct(x)
     loss = nn.functional.binary_cross_entropy_with_logits(y_pred, y)
+
+    y = torch.argmax(y, dim=-1)
+    y_pred = torch.argmax(y_pred, dim=-1)
+    acc = torch.mean((y == y_pred)*1.)
+    
+    self.log_dict({'acc': acc}, prog_bar=True)
     
     return loss
 
@@ -68,7 +74,12 @@ class CCT(pl.LightningModule):
     x, y = batch
     y_pred = self.cct(x)
     loss = nn.functional.binary_cross_entropy_with_logits(y_pred, y)
-    return loss
+    
+    y = torch.argmax(y, dim=-1)
+    y_pred = torch.argmax(y_pred, dim=-1)
+    acc = torch.mean((y == y_pred)*1.)
+
+    return loss, acc
 
   def test_step(self, batch, batch_idx):
     x, y = batch
@@ -81,8 +92,9 @@ class CCT(pl.LightningModule):
     return optimizer
 
 
-mnist = MNIST(batch_size=8)
-mnist.setup()
-cct = CCT()
-trainer = pl.Trainer(max_epochs=1)
-trainer.fit(model=cct, datamodule=mnist)
+if __name__ == "__main__":
+  mnist = MNIST(batch_size=8)
+  mnist.setup()
+  cct = CCT()
+  trainer = pl.Trainer(max_epochs=1)
+  trainer.fit(model=cct, datamodule=mnist)
