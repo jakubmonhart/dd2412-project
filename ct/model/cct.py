@@ -85,7 +85,8 @@ class TransformerClassifier(nn.Module):
          attention_dropout=0.1,
          stochastic_depth=0.1,
          positional_embedding='learnable',
-         sequence_length=None):
+         sequence_length=None,
+         backbone=False):
     super().__init__()
     positional_embedding = positional_embedding if \
       positional_embedding in ['sine', 'learnable', 'none'] else 'sine'
@@ -94,6 +95,7 @@ class TransformerClassifier(nn.Module):
     self.sequence_length = sequence_length
     self.seq_pool = seq_pool
     self.num_tokens = 0
+    self.backbone = backbone
 
     assert sequence_length is not None or positional_embedding == 'none', \
       f"Positional embedding is set to {positional_embedding} and" \
@@ -147,16 +149,16 @@ class TransformerClassifier(nn.Module):
       x = blk(x)
     x = self.norm(x)
 
-    # TODO - what to return from this backbone?
-    return x
+    if self.backbone:
+      return x
+    else:
+      if self.seq_pool:
+        x = torch.matmul(F.softmax(self.attention_pool(x), dim=1).transpose(-1, -2), x).squeeze(-2)
+      else:
+        x = x[:, 0]
 
-    # if self.seq_pool:
-    #   x = torch.matmul(F.softmax(self.attention_pool(x), dim=1).transpose(-1, -2), x).squeeze(-2)
-    # else:
-    #   x = x[:, 0]
-
-    # x = self.fc(x)
-    # return x
+      x = self.fc(x)
+      return x
 
   @staticmethod
   def init_weight(m):
@@ -243,6 +245,7 @@ class CCT_torch(nn.Module):
          mlp_ratio=4.0,
          num_classes=1000,
          positional_embedding='learnable',
+         backbone=False,
          *args, **kwargs):
     super(CCT_torch, self).__init__()
 
@@ -272,7 +275,8 @@ class CCT_torch(nn.Module):
       num_heads=num_heads,
       mlp_ratio=mlp_ratio,
       num_classes=num_classes,
-      positional_embedding=positional_embedding
+      positional_embedding=positional_embedding,
+      backbone=backbone
     )
 
   def forward(self, x):

@@ -55,7 +55,7 @@ class CCT(pl.LightningModule):
     
     self.cct = CCT_torch(
       img_size=28, n_input_channels=1, num_layers=2, num_heads=2,
-      embedding_dim=128, num_classes=10, mlp_ratio=1)
+      embedding_dim=128, num_classes=10, mlp_ratio=1, backend=False)
 
   def training_step(self, batch, batch_idx):
     x, y = batch

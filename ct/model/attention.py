@@ -22,8 +22,9 @@ class CrossAttention(nn.Module):
     head_dim = dim // self.num_heads
     self.scale = head_dim ** -0.5
 
-    self.q = nn.Linear(dim, dim, bias=False)
-    self.kv = nn.Linear(dim, dim * 2, bias=False)
+    self.q = nn.Linear(dim, dim, bias=False) # TODO - do we want bias here?
+    self.k = nn.Linear(dim, dim, bias=False)
+    self.v = nn.Linear(dim, dim, bias=False)
     self.attn_drop = nn.Dropout(attention_dropout)
     self.proj = nn.Linear(dim, out_dim)
     self.proj_drop = nn.Dropout(projection_dropout)
@@ -38,16 +39,13 @@ class CrossAttention(nn.Module):
     B, Nx, D = x.shape
     By, Ny, Dy = y.shape 
 
-    
     assert By == 1 # We are using the same concept for each image in the batch, 
                    # batch dimension is broadcasted in attn computation 
     assert D == Dy
 
     q = self.q(x).reshape(B, Nx, self.num_heads, D // self.num_heads).permute(0, 2, 1, 3) # [B, NH, Nx, DH]
-    
-    kv = self.kv(y).reshape(1, Ny, 2, self.num_heads, D // self.num_heads).permute(2, 0, 3, 1, 4)
-    
-    k, v = kv[0], kv[1] # [1, NH, Ny, DH]
+    k = self.k(y).reshape(1, Ny, self.num_heads, D // self.num_heads).permute(0, 2, 1, 3) # [1, NH, Ny, DH]
+    v = self.v(y).reshape(1, Ny, self.num_heads, D // self.num_heads).permute(0, 2, 1, 3) # [1, NH, Ny, DH]
 
     attn = (q @ k.transpose(-2, -1)) * self.scale # [B, NH, Nx, Ny]
     attn = attn.softmax(dim=-1) # [B, NH, Nx, Ny]
