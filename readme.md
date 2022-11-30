@@ -1,4 +1,6 @@
-# Project structure
+# Challenging Conceptual Transformers
+
+## Project structure
 
 ```
 .
@@ -20,13 +22,16 @@
 └── .gitignore
 ```
 
+## Data
 
-# Data
-
-## aPY
+### aPY
 
 Download annotations and aYahoo test dataset from: https://vision.cs.uiuc.edu/attributes/
 Download aPascal train/validation data from: http://host.robots.ox.ac.uk/pascal/VOC/voc2008/index.html#devkit
 (Direct dwnld link for aPascal: http://host.robots.ox.ac.uk/pascal/VOC/voc2008/VOCtrainval_14-Jul-2008.tar)
 VOC2008 documentation downloaded from http://host.robots.ox.ac.uk/pascal/VOC/voc2008/devkit_doc_21-Apr-2008.pdf
 (We probably do not need it, enough info in attribute_data/README.md file)
+
+## Report
+
+https://www.overleaf.com/8966194915vvrcgtbpmpdn
