@@ -15,14 +15,14 @@ class MNIST(pl.LightningDataModule):
 
   """
   TODO
-    - image transoformation: augmentation
-    - use AdamW
+    - image transformation: augmentation
   """
 
-  def __init__(self, batch_size, root='data'):
+  def __init__(self, batch_size, root='data', seed=42):
     super().__init__()
     self.root = root
     self.batch_size = batch_size
+    self.seed = seed
 
   def prepare_data(self):
     torchvision.datasets.MNIST(root=self.root, train=True, download=True)
@@ -37,6 +37,9 @@ class MNIST(pl.LightningDataModule):
     return (target_class, target_concept)
 
   def setup(self, stage=None):
+    # For reproducibility
+    self.generator = torch.Generator().manual_seed(self.seed)
+
     mnist = torchvision.datasets.MNIST(root=self.root, train=True)
     self.mean = torch.mean(mnist.data.float() / 255.0)
     self.std = torch.std(mnist.data.float() / 255.0)
@@ -49,13 +52,13 @@ class MNIST(pl.LightningDataModule):
     target_transform = transforms.Lambda(self.generate_class_concept)
 
     train_full = torchvision.datasets.MNIST(root=self.root, train=True, transform=transform, target_transform=target_transform)
+    self.train, self.val = data.random_split(
+      train_full, lengths=[0.9, 0.1], generator=self.generator)
 
-    self.train = data.Subset(dataset=train_full, indices=range(55000))
-    self.val = data.Subset(dataset=train_full, indices=range(55000, len(train_full)))
     self.test = torchvision.datasets.MNIST(root=self.root, train=False, transform=transform, target_transform=target_transform)
 
   def train_dataloader(self):
-    return data.DataLoader(self.train, batch_size=self.batch_size)
+    return data.DataLoader(self.train, batch_size=self.batch_size, shuffle=True, generator=self.generator)
 
   def val_dataloader(self):
     return data.DataLoader(self.val, batch_size=self.batch_size)
