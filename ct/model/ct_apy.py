@@ -2,6 +2,7 @@ import torch
 from torch import nn, optim
 import pytorch_lightning as pl
 import torchmetrics
+import torch.nn.functional as F
 
 from .cct import CCT_torch
 from .ct import ConceptTransformer
@@ -11,17 +12,21 @@ import logging
 logging.getLogger("lightning").setLevel(logging.ERROR)
 
 
-class CT_MNIST_torch(nn.Module):
+class CT_aPY_torch(nn.Module):
   dim = 128
-  n_classes = 1 # Binary classification
-  n_concepts = 10
+  n_classes = 32
+  n_concepts = 64
+
+  """
+  TODO:
+    - Backend CT uses ResNet50 as the tokenizer
+  """
 
   def __init__(self):
     super().__init__()
     
-    # Backend - compact transformer - using same parameters as authors of Concept Transformer in their code (not mentioned in the paper)
     self.cct = CCT_torch(
-      img_size=28, n_input_channels=1, num_layers=2, num_heads=2,
+      img_size=256, n_input_channels=3, num_layers=2, num_heads=2,
       embedding_dim=self.dim, num_classes=self.n_classes, mlp_ratio=1, backbone=True)
 
     # Concept transformer
@@ -40,9 +45,7 @@ class CT_MNIST_torch(nn.Module):
 
 
 def loss_fn(target_class, target_concept, pred_class, attn, expl_coeff=2.0):
-  pred_class = pred_class.squeeze()
-  target_class = target_class.float()
-  cls_loss = nn.functional.binary_cross_entropy_with_logits(pred_class, target_class)
+  cls_loss = F.cross_entropy(pred_class, target_class)
   
   # We are using multiple-head attention -> we need to average over them?
   attn = attn.squeeze(2)
@@ -57,11 +60,11 @@ def loss_fn(target_class, target_concept, pred_class, attn, expl_coeff=2.0):
   return loss, cls_loss.item(), expl_loss.item()
 
 
-class CT_MNIST(pl.LightningModule):
+class CT_aPY(pl.LightningModule):
   def __init__(self):
     super().__init__()
     
-    self.model = CT_MNIST_torch()
+    self.model = CT_aPY_torch()
 
     # self.accuracy = torchmetrics.Accuracy()
     self.accuracy_fn = torchmetrics.functional.accuracy

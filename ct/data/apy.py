@@ -114,10 +114,10 @@ class aPY_torchvision(VisionDataset):
 
     # Load target
     target_class = self.class2id[item_data['class']]
-    target_class = torch.tensor(target_class).float().unsqueeze(0)
+    target_class = torch.tensor(target_class)
 
     # Load atributes
-    target_concept = torch.tensor(item_data[range(64)].to_numpy(dtype='float'))
+    target_concept = torch.tensor(item_data[range(64)].to_numpy(dtype='float32'))
 
     return img, (target_class, target_concept)
 
@@ -222,7 +222,8 @@ class aPY(pl.LightningDataModule):
     self.train, self.val = data.random_split(
       train_full, lengths=[0.9, 0.1], generator=self.generator)
     
-    self.test = train_full = aPY_torchvision(train=False, transform=transform, yahoo=self.yahoo)
+    self.test = train_full = aPY_torchvision(
+      train=False, transform=transform, yahoo=self.yahoo)
 
   def train_dataloader(self):
     return data.DataLoader(self.train, batch_size=self.batch_size, shuffle=True, generator=self.generator)

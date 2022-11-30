@@ -31,8 +31,8 @@ class MNIST(pl.LightningDataModule):
   def generate_class_concept(self, y):
     y = torch.tensor(y)
     target_concept = F.one_hot(y, num_classes=10).float() # One-hot encoding of true label
-    target_class = ((y%2) == 0)*1.0 # even/odd
-    target_class = target_class.unsqueeze(0)
+    target_class = ((y%2) == 0)*1 # even/odd
+    target_class = target_class
  
     return (target_class, target_concept)
 
