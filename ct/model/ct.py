@@ -29,7 +29,7 @@ class ConceptTransformer(nn.Module):
 
 
   def forward(self, x):
-
+  
     # Pool over patches (taken from the Appendix C of the paper) - TODO - why not use simple mean here?
     token_attn = F.softmax(self.token_attention_pool(x), dim=1).transpose(-1, -2)
     x_pooled = torch.matmul(token_attn, x)

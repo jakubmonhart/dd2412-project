@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import torchvision
+
 from .attention import SelfAttention as Attention
 
 
@@ -277,6 +279,66 @@ class CCT_torch(nn.Module):
       num_classes=num_classes,
       positional_embedding=positional_embedding,
       backbone=backbone
+    )
+
+  def forward(self, x):
+    x = self.tokenizer(x)
+    return self.classifier(x)
+
+
+class ResNetTokenizer(nn.Module):
+  def __init__(self, n_output_channels):
+    super(ResNetTokenizer, self).__init__()
+
+    resnet = torchvision.models.resnet50()
+
+    layers = list(resnet.children())[:-2]
+    self.feature_extractor = nn.Sequential(*layers)
+    self.flattener = nn.Flatten(2, 3)
+    n_channels = self.feature_extractor(torch.zeros((1, 3, 232, 232))).shape[1]
+
+    # TODO - is there a better approach to solve difference between resnet output dimension and expected input shape of TransformerClassifier?
+    self.linear = nn.Linear(n_channels, n_output_channels)
+
+  def sequence_length(self, n_channels=3, height=232, width=232):
+    return self.forward(torch.zeros((1, n_channels, height, width))).shape[1]
+
+  def forward(self, x):
+    return self.linear(self.flattener(self.feature_extractor(x)).transpose(-2, -1))
+
+
+class CCT_ResNet_torch(nn.Module):
+  def __init__(self,
+         img_size=232,
+         embedding_dim=768,
+         n_input_channels=3,
+         dropout=0.,
+         attention_dropout=0.1,
+         stochastic_depth=0.1,
+         num_layers=14,
+         num_heads=6,
+         mlp_ratio=4.0,
+         num_classes=1000,
+         positional_embedding='learnable'):
+    super(CCT_ResNet_torch, self).__init__()
+
+    self.tokenizer = ResNetTokenizer(n_output_channels=embedding_dim)
+
+    self.classifier = TransformerClassifier(
+      sequence_length=self.tokenizer.sequence_length(n_channels=n_input_channels,
+                               height=img_size,
+                               width=img_size),
+      embedding_dim=embedding_dim,
+      seq_pool=True,
+      dropout=dropout,
+      attention_dropout=attention_dropout,
+      stochastic_depth=stochastic_depth,
+      num_layers=num_layers,
+      num_heads=num_heads,
+      mlp_ratio=mlp_ratio,
+      num_classes=num_classes,
+      positional_embedding=positional_embedding,
+      backbone=True
     )
 
   def forward(self, x):

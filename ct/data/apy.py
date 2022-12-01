@@ -191,6 +191,8 @@ class aPY_torchvision(VisionDataset):
 class aPY(pl.LightningDataModule):
 
   """
+  ResNet (backbone used in CCT Tokenizer) resizes images to 232.
+
   TODO
     - image transformation: augmentation
     - Normalize with imagenet statistics? (we are using renset pretreined on imagenet in the backbone)
@@ -198,7 +200,7 @@ class aPY(pl.LightningDataModule):
     - Stratify train/val split?
   """
 
-  def __init__(self, batch_size, image_size=256, yahoo=False, seed=42):
+  def __init__(self, batch_size, image_size=232, yahoo=False, seed=42):
     super().__init__()
     self.batch_size = batch_size
     self.image_size = image_size

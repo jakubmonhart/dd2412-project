@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torchmetrics
 import torch.nn.functional as F
 
-from .cct import CCT_torch
+from .cct import CCT_ResNet_torch
 from .ct import ConceptTransformer
 
 import logging
@@ -25,9 +25,9 @@ class CT_aPY_torch(nn.Module):
   def __init__(self):
     super().__init__()
     
-    self.cct = CCT_torch(
-      img_size=256, n_input_channels=3, num_layers=2, num_heads=2,
-      embedding_dim=self.dim, num_classes=self.n_classes, mlp_ratio=1, backbone=True)
+    self.cct = CCT_ResNet_torch(
+      img_size=232, n_input_channels=3, num_layers=2, num_heads=2,
+      embedding_dim=self.dim, num_classes=self.n_classes, mlp_ratio=1)
 
     # Concept transformer
     self.concept_transformer = ConceptTransformer(n_concepts=self.n_concepts, dim=self.dim, n_classes=self.n_classes)
@@ -80,7 +80,7 @@ class CT_aPY(pl.LightningModule):
     # self.accuracy(pred_class, target_class.int())
     acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0)
     self.log('train_cls_loss', cls_loss)
-    self.log('train_expl_loss', expl_loss)
+    self.log('train_expl_loss', expl_loss, prog_bar=True)
     self.log('train_acc', acc, prog_bar=True)
     
     return loss
