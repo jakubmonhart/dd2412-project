@@ -35,3 +35,22 @@ VOC2008 documentation downloaded from http://host.robots.ox.ac.uk/pascal/VOC/voc
 ## Report
 
 https://www.overleaf.com/8966194915vvrcgtbpmpdn
+
+## gcp environment installation
+
+Using Deep Learning VM on google cloud.
+zone: europe-west1-c
+series: N1
+machine type: n1-highmem-2 (2 vCPU, 13 GB memory) (default)
+gpu: NVIDIA T4
+framework: PyTorch 1.12 (CUDA 11.3) (Don't forget to confirm you want to install GPU drivers)
+boot disk: Standard Persistent Disk (default) - 200 GB
+
+```
+conda create -n dd2412 python=3.10
+conda activate dd2412
+conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch
+pip install pytorch_lightning
+conda install pandas
+<!-- conda install -c conda-forge scikit-learn -->
+```

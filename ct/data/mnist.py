@@ -52,8 +52,12 @@ class MNIST(pl.LightningDataModule):
     target_transform = transforms.Lambda(self.generate_class_concept)
 
     train_full = torchvision.datasets.MNIST(root=self.root, train=True, transform=transform, target_transform=target_transform)
+    
+    train_len = round(0.9*len(train_full))
+    val_len = len(train_full) - train_len
+
     self.train, self.val = data.random_split(
-      train_full, lengths=[0.9, 0.1], generator=self.generator)
+      train_full, lengths=[train_len, val_len], generator=self.generator)
 
     self.test = torchvision.datasets.MNIST(root=self.root, train=False, transform=transform, target_transform=target_transform)
 

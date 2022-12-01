@@ -13,7 +13,7 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 
 
 class CT_aPY_torch(nn.Module):
-  dim = 128
+  dim = 768
   n_classes = 32
   n_concepts = 64
 
@@ -26,8 +26,8 @@ class CT_aPY_torch(nn.Module):
     super().__init__()
     
     self.cct = CCT_ResNet_torch(
-      img_size=232, n_input_channels=3, num_layers=2, num_heads=2,
-      embedding_dim=self.dim, num_classes=self.n_classes, mlp_ratio=1)
+      img_size=232, n_input_channels=3, num_layers=14, num_heads=6,
+      embedding_dim=self.dim, num_classes=self.n_classes, mlp_ratio=4.0)
 
     # Concept transformer
     self.concept_transformer = ConceptTransformer(n_concepts=self.n_concepts, dim=self.dim, n_classes=self.n_classes)
@@ -61,13 +61,16 @@ def loss_fn(target_class, target_concept, pred_class, attn, expl_coeff=2.0):
 
 
 class CT_aPY(pl.LightningModule):
+  n_classes = 32
+
   def __init__(self):
     super().__init__()
     
     self.model = CT_aPY_torch()
 
-    # self.accuracy = torchmetrics.Accuracy()
-    self.accuracy_fn = torchmetrics.functional.accuracy
+    self.train_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes)
+    self.val_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes)
+    # self.accuracy_fn = torchmetrics.functional.accuracy
 
   def training_step(self, batch, batch_idx):
     image, (target_class, target_concept) = batch
@@ -77,11 +80,12 @@ class CT_aPY(pl.LightningModule):
     loss, cls_loss, expl_loss = loss_fn(target_class, target_concept, pred_class, attn)
 
     # Accuracy
-    # self.accuracy(pred_class, target_class.int())
-    acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0)
+    self.train_accuracy(pred_class, target_class.int())
+    # acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0, task='multiclass', num_classes=self.n_classes)
     self.log('train_cls_loss', cls_loss)
     self.log('train_expl_loss', expl_loss, prog_bar=True)
-    self.log('train_acc', acc, prog_bar=True)
+    # self.log('train_acc', acc, prog_bar=True)
+    self.log('train_acc', self.train_accuracy, prog_bar=True)
     
     return loss
 
@@ -93,10 +97,12 @@ class CT_aPY(pl.LightningModule):
     loss, cls_loss, expl_loss = loss_fn(target_class, target_concept, pred_class, attn)
 
     # Accuracy
-    acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0)
+    self.val_accuracy(pred_class, target_class.int())
+    # acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0, task='multiclass', num_classes=self.n_classes)
     self.log('val_cls_loss', cls_loss)
     self.log('val_expl_loss', expl_loss)
-    self.log('val_acc', acc, prog_bar=True)
+    # self.log('val_acc', acc, prog_bar=True)
+    self.log('val_acc', self.val_accuracy, prog_bar=True)
     self.log('val_loss', loss)
 
 
@@ -108,12 +114,12 @@ class CT_aPY(pl.LightningModule):
     loss, cls_loss, expl_loss = loss_fn(target_class, target_concept, pred_class, attn)
 
     # Accuracy
-    acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0)
+    # acc = self.accuracy_fn(pred_class, target_class.int(), threshold=0.0, task='multiclass', num_classes=self.n_classes)
     self.log('test_cls_loss', cls_loss)
     self.log('test_expl_loss', expl_loss)
-    self.log('test_acc', acc, prog_bar=True)
+    # self.log('test_acc', acc, prog_bar=True)
     self.log('test_loss', loss)
 
   def configure_optimizers(self):
-    optimizer = optim.AdamW(self.parameters(), lr=1e-3)
+    optimizer = optim.AdamW(self.parameters(), lr=5e-4)
     return optimizer

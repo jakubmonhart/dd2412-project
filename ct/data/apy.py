@@ -196,7 +196,7 @@ class aPY(pl.LightningDataModule):
   TODO
     - image transformation: augmentation
     - Normalize with imagenet statistics? (we are using renset pretreined on imagenet in the backbone)
-    - Fix seed for random subset selection
+    - Fix seed for random subset selection (numpy seed for sklearn train_test_split)
     - Stratify train/val split?
   """
 
@@ -221,8 +221,12 @@ class aPY(pl.LightningDataModule):
     ])
 
     train_full = aPY_torchvision(train=True, transform=transform)
+    
+    train_len = round(0.9*len(train_full))
+    val_len = len(train_full) - train_len
+
     self.train, self.val = data.random_split(
-      train_full, lengths=[0.9, 0.1], generator=self.generator)
+      train_full, lengths=[train_len, val_len], generator=self.generator)
     
     self.test = train_full = aPY_torchvision(
       train=False, transform=transform, yahoo=self.yahoo)

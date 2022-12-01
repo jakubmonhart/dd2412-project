@@ -1,5 +1,7 @@
 import datetime
 
+import torch
+
 import pytorch_lightning as pl
 
 from ct.model.ct_apy import CT_aPY
@@ -16,8 +18,15 @@ from ct.data.apy import aPY
 # loss = loss_fn(target_class, target_concept, pred_class, attn)
 # breakpoint()
 
-apy = aPY(batch_size=2)
+apy = aPY(batch_size=64)
 model = CT_aPY()
 logger = pl.loggers.TensorBoardLogger(save_dir='logs/apy', name=datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"), version=None)
-trainer = pl.Trainer(max_epochs=1, val_check_interval=100, logger=logger)
+
+if torch.cuda.is_available():
+  print('using gpu')
+  accelerator = 'gpu'
+else:
+  accelerator = None
+
+trainer = pl.Trainer(max_epochs=5, logger=logger, accelerator=accelerator, devices=1)
 trainer.fit(model=model, datamodule=apy)
