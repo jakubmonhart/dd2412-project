@@ -14,7 +14,7 @@ class ConceptTransformer(nn.Module):
   Only non-spatial for now (enough for MNIST dataset).
   """
 
-  def __init__(self, n_concepts, dim, n_classes, num_heads=2):
+  def __init__(self, n_concepts, dim, n_classes, att_pool=True, num_heads=2):
     """
     num_heads is not specified in the text, from the code, it looks like 2 is used for MNIST experiment
     """
@@ -24,19 +24,22 @@ class ConceptTransformer(nn.Module):
     # Initialization of the parameter is not described in the text, only in the code in Appendix C (TODO - should we try other options)
     nn.init.trunc_normal_(self.concepts, std=1.0 / math.sqrt(dim))
     self.cross_attention = CrossAttention(dim=dim, out_dim=n_classes, num_heads=num_heads)
-
-    self.token_attention_pool = nn.Linear(dim, 1)
+    
+    if att_pool:
+      self.token_attention_pool = nn.Linear(dim, 1)
+    else:
+      self.token_attention_pool = None
 
 
   def forward(self, x):
+    
+    if self.token_attention_pool:
+      # Pool over patches (taken from the Appendix C of the paper) - TODO - why not use simple mean here?
+      token_attn = F.softmax(self.token_attention_pool(x), dim=1).transpose(-1, -2)
+      x = torch.matmul(token_attn, x)
+
+    out, attn = self.cross_attention(x, self.concepts) # out.shape = [B, P, n_classes] - P=1 for mnist experiment
+    out = out.squeeze(1) # Squeeze over patches (there is only one for global concepts)
   
-    # Pool over patches (taken from the Appendix C of the paper) - TODO - why not use simple mean here?
-    token_attn = F.softmax(self.token_attention_pool(x), dim=1).transpose(-1, -2)
-    x_pooled = torch.matmul(token_attn, x)
-
-    out, attn = self.cross_attention(x_pooled, self.concepts) # out.shape = [B, P, n_classes] - P=1 for mnist experiment
-    out = out.squeeze(1) # Squeeze over patches (there is only one)
-    # attn = attn.mean(1) # Average attention over heads
-
     return out, attn
 

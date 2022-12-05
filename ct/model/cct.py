@@ -287,10 +287,13 @@ class CCT_torch(nn.Module):
 
 
 class ResNetTokenizer(nn.Module):
-  def __init__(self, n_output_channels):
+  def __init__(self, n_output_channels, resnet='50'):
     super(ResNetTokenizer, self).__init__()
 
-    resnet = torchvision.models.resnet50()
+    if resnet == '50':
+      resnet = torchvision.models.resnet50(weights='IMAGENET1K_V2')
+    elif resnet == '34':
+      resnet = torchvision.models.resnet34(weights='IMAGENET1K_V1')
 
     layers = list(resnet.children())[:-2]
     self.feature_extractor = nn.Sequential(*layers)
@@ -319,10 +322,11 @@ class CCT_ResNet_torch(nn.Module):
          num_heads=6,
          mlp_ratio=4.0,
          num_classes=1000,
-         positional_embedding='learnable'):
+         positional_embedding='learnable',
+         resnet='50'):
     super(CCT_ResNet_torch, self).__init__()
 
-    self.tokenizer = ResNetTokenizer(n_output_channels=embedding_dim)
+    self.tokenizer = ResNetTokenizer(n_output_channels=embedding_dim, resnet=resnet)
 
     self.classifier = TransformerClassifier(
       sequence_length=self.tokenizer.sequence_length(n_channels=n_input_channels,

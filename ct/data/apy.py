@@ -7,7 +7,6 @@ from tqdm import tqdm
 import torch
 from torch.utils import data
 
-import torchvision
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.utils import download_and_extract_archive
 from torchvision import transforms
@@ -19,9 +18,6 @@ class aPY_torchvision(VisionDataset):
   attributes_url = 'http://vision.cs.uiuc.edu/attributes/attribute_data.tar.gz'
   pascal_url = 'http://host.robots.ox.ac.uk/pascal/VOC/voc2008/VOCtrainval_14-Jul-2008.tar'
   yahoo_url = 'http://vision.cs.uiuc.edu/attributes/ayahoo_test_images.tar.gz'
-  # root = 'data/apy'
-  # raw_folder = 'data/apy/raw'
-
 
   def __init__(self, download=False, train=True, yahoo=False, transform=None, data_path='data'):
     '''
