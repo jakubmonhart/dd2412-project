@@ -19,16 +19,18 @@ class aPY_torchvision(VisionDataset):
   attributes_url = 'http://vision.cs.uiuc.edu/attributes/attribute_data.tar.gz'
   pascal_url = 'http://host.robots.ox.ac.uk/pascal/VOC/voc2008/VOCtrainval_14-Jul-2008.tar'
   yahoo_url = 'http://vision.cs.uiuc.edu/attributes/ayahoo_test_images.tar.gz'
-  root = 'data/apy'
-  raw_folder = 'data/apy/raw'
+  # root = 'data/apy'
+  # raw_folder = 'data/apy/raw'
 
 
-  def __init__(self, download=False, train=True, yahoo=False, transform=None):
+  def __init__(self, download=False, train=True, yahoo=False, transform=None, data_path='data'):
     '''
     Args:
       yahoo (bool): include yahoo test dataset (that corresponds to the aPY dataset) if True, otherwise test only on aPascal test set. 
     '''
 
+    self.root = os.path.join(data_path, 'apy')
+    self.raw_folder = os.path.join(self.root, 'raw')
     self.train = train
     self.yahoo = yahoo
     self.transform = transform
@@ -200,15 +202,16 @@ class aPY(pl.LightningDataModule):
     - Stratify train/val split?
   """
 
-  def __init__(self, batch_size, image_size=232, yahoo=False, seed=42):
+  def __init__(self, batch_size, image_size=224, yahoo=False, seed=42, data_path='data'):
     super().__init__()
+    self.data_path = data_path
     self.batch_size = batch_size
     self.image_size = image_size
     self.yahoo = yahoo
     self.seed = seed
     
   def prepare_data(self):
-    aPY_torchvision(download=True)
+    aPY_torchvision(download=True, data_path=self.data_path)
   
   def setup(self, stage=None):
     # For reproducibility
@@ -216,11 +219,13 @@ class aPY(pl.LightningDataModule):
     
     transform = transforms.Compose([
       transforms.Resize(size=(self.image_size, self.image_size)),
-      transforms.ToTensor(), 
+      transforms.RandomHorizontalFlip(p=0.5),
+      transforms.RandomRotation(degrees=15),
+      transforms.ToTensor(),
       transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
-    train_full = aPY_torchvision(train=True, transform=transform)
+    train_full = aPY_torchvision(train=True, transform=transform, data_path=self.data_path)
     
     train_len = round(0.9*len(train_full))
     val_len = len(train_full) - train_len
@@ -229,7 +234,7 @@ class aPY(pl.LightningDataModule):
       train_full, lengths=[train_len, val_len], generator=self.generator)
     
     self.test = train_full = aPY_torchvision(
-      train=False, transform=transform, yahoo=self.yahoo)
+      train=False, transform=transform, yahoo=self.yahoo, data_path=self.data_path)
 
   def train_dataloader(self):
     return data.DataLoader(self.train, batch_size=self.batch_size, shuffle=True, generator=self.generator)

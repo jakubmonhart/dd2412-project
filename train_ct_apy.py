@@ -7,17 +7,6 @@ import pytorch_lightning as pl
 from ct.model.ct_apy import CT_aPY
 from ct.data.apy import aPY
 
-# apy = aPY(batch_size=2)
-# model = CT_aPY()
-# apy.setup()
-# train = apy.train_dataloader()
-# for img, (target_class, target_concept) in train:
-#   break
-# pred_class, attn = model.model(img)
-# from ct.model.ct_apy import loss_fn
-# loss = loss_fn(target_class, target_concept, pred_class, attn)
-# breakpoint()
-
 apy = aPY(batch_size=64)
 model = CT_aPY()
 logger = pl.loggers.TensorBoardLogger(save_dir='logs/apy', name=datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"), version=None)
@@ -28,5 +17,5 @@ if torch.cuda.is_available():
 else:
   accelerator = None
 
-trainer = pl.Trainer(max_epochs=5, logger=logger, accelerator=accelerator, devices=1)
+trainer = pl.Trainer(max_epochs=200, logger=logger, accelerator=accelerator, devices=1)
 trainer.fit(model=model, datamodule=apy)

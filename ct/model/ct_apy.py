@@ -3,6 +3,7 @@ from torch import nn, optim
 import pytorch_lightning as pl
 import torchmetrics
 import torch.nn.functional as F
+import torchvision
 
 from .cct import CCT_ResNet_torch
 from .ct import ConceptTransformer
@@ -22,11 +23,11 @@ class CT_aPY_torch(nn.Module):
     - Backend CT uses ResNet50 as the tokenizer
   """
 
-  def __init__(self):
+  def __init__(self, image_size):
     super().__init__()
     
     self.cct = CCT_ResNet_torch(
-      img_size=232, n_input_channels=3, num_layers=14, num_heads=6,
+      img_size=image_size, n_input_channels=3, num_layers=14, num_heads=6,
       embedding_dim=self.dim, num_classes=self.n_classes, mlp_ratio=4.0)
 
     # Concept transformer
@@ -44,7 +45,7 @@ class CT_aPY_torch(nn.Module):
     return out, attn
 
 
-def loss_fn(target_class, target_concept, pred_class, attn, expl_coeff=2.0):
+def loss_fn(target_class, target_concept, pred_class, attn, expl_coeff=0.0):
   cls_loss = F.cross_entropy(pred_class, target_class)
   
   # We are using multiple-head attention -> we need to average over them?
@@ -63,10 +64,10 @@ def loss_fn(target_class, target_concept, pred_class, attn, expl_coeff=2.0):
 class CT_aPY(pl.LightningModule):
   n_classes = 32
 
-  def __init__(self):
+  def __init__(self, image_size=320):
     super().__init__()
-    
-    self.model = CT_aPY_torch()
+  
+    self.model = CT_aPY_torch(image_size=image_size)
 
     self.train_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes)
     self.val_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes)
@@ -121,5 +122,5 @@ class CT_aPY(pl.LightningModule):
     self.log('test_loss', loss)
 
   def configure_optimizers(self):
-    optimizer = optim.AdamW(self.parameters(), lr=5e-4)
+    optimizer = optim.AdamW(self.parameters(), lr=1e-4)
     return optimizer
