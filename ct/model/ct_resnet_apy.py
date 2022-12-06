@@ -57,6 +57,7 @@ class CT_ResNet_aPY(pl.LightningModule):
     super().__init__()
 
     self.args = args
+    self.save_hyperparameters()
   
     self.model = CT_ResNet_aPY_torch(num_heads=args.num_heads, resnet=args.resnet)
 
@@ -112,7 +113,20 @@ class CT_ResNet_aPY(pl.LightningModule):
     self.log('test_expl_loss', expl_loss, prog_bar=True)
     self.log('test_loss', loss)
 
-  def loss_fn(self, target_class, target_concept, pred_class, attn, expl_coeff=0.0):
+  def predict_step(self, batch, batch_idx=None):
+    image, (target_class, target_concept) = batch
+    pred_class, attn = self.model(image)
+    pred_class = pred_class.argmax(dim=-1)
+    attn = attn.squeeze(2)
+    attn = torch.mean(attn, dim=1)
+
+    # Unnormalize
+    image = torchvision.transforms.functional.normalize(image, mean=(0, 0, 0), std=(1/0.229, 1/0.224, 1/0.225))
+    image = torchvision.transforms.functional.normalize(image, mean=(-0.485, -0.456, -0.406), std=(1, 1, 1))
+
+    return image, target_class, target_concept, pred_class, attn
+
+  def loss_fn(self, target_class, target_concept, pred_class, attn):
     if self.args.loss_weight:
       cls_loss = F.cross_entropy(pred_class, target_class, weight=self.class_weight.cuda())
     else:
@@ -123,10 +137,15 @@ class CT_ResNet_aPY(pl.LightningModule):
     attn = torch.mean(attn, dim=1)
 
     # TODO - should we normalize the attentions to sum to 1 as they do in the paper?
+    # attn went through softmax before, we need to account for that
+    breakpoint()
+    norm = target_concept.sum(-1, keepdims=True)    
+    normalized_target_concept = (target_concept / norm).float()
+    n_concepts = normalized_target_concept.shape[-1]
   
-    expl_loss = nn.functional.mse_loss(target_concept, attn)
+    expl_loss = n_concepts*nn.functional.mse_loss(target_concept, attn)
   
-    loss = cls_loss + expl_coeff*expl_loss
+    loss = cls_loss + self.args.expl_coeff*expl_loss
 
     return loss, cls_loss.item(), expl_loss.item()
 

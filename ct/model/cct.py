@@ -312,7 +312,7 @@ class ResNetTokenizer(nn.Module):
 
 class CCT_ResNet_torch(nn.Module):
   def __init__(self,
-         img_size=232,
+         img_size=224,
          embedding_dim=768,
          n_input_channels=3,
          dropout=0.,

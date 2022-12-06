@@ -89,11 +89,20 @@ class aPY_torchvision(VisionDataset):
       self.df = self.test_df
 
     # Load class2id
-    classes = pd.read_csv('data/apy/class_names.txt', header=None)[0].values
+    classes = pd.read_csv(os.path.join(self.root, 'class_names.txt'), header=None)[0].values
     class2id = dict()
     for i, c in enumerate(classes):
       class2id[c] = i
     self.class2id = class2id
+    
+    # Create id2class
+    self.id2class = [None]*len(class2id)
+    for k in class2id.keys():
+      self.id2class[class2id[k]] = k
+
+    # Load id2attribute
+    id2attribute = pd.read_csv(os.path.join(self.root, 'attribute_names.txt'), header=None)
+    self.id2attribute = id2attribute.loc[:, 0].values
 
   def __len__(self):
     return len(self.df)
@@ -213,7 +222,7 @@ class aPY(pl.LightningDataModule):
     # For reproducibility
     self.generator = torch.Generator().manual_seed(self.seed)
     
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
       transforms.Resize(size=(self.image_size, self.image_size)),
       transforms.RandomHorizontalFlip(p=0.5),
       transforms.RandomRotation(degrees=15),
@@ -221,16 +230,26 @@ class aPY(pl.LightningDataModule):
       transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
-    train_full = aPY_torchvision(train=True, transform=transform, data_path=self.data_path)
+    val_transform = transforms.Compose([
+      transforms.Resize(size=(self.image_size, self.image_size)),
+      transforms.ToTensor(),
+      transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    ])
+
+    train_full = aPY_torchvision(train=True, transform=train_transform, data_path=self.data_path)
+    val_full = aPY_torchvision(train=True, transform=val_transform, data_path=self.data_path)
     
     train_len = round(0.9*len(train_full))
     val_len = len(train_full) - train_len
 
-    self.train, self.val = data.random_split(
+    self.train, val = data.random_split(
       train_full, lengths=[train_len, val_len], generator=self.generator)
     
+    # Create val only to get the indices easily, now create actual val with val_transform
+    self.val = data.Subset(dataset=val_full, indices=val.indices)
+    
     self.test = train_full = aPY_torchvision(
-      train=False, transform=transform, yahoo=self.yahoo, data_path=self.data_path)
+      train=False, transform=val_transform, yahoo=self.yahoo, data_path=self.data_path)
 
   def train_dataloader(self):
     return data.DataLoader(self.train, batch_size=self.batch_size, shuffle=True, generator=self.generator)
