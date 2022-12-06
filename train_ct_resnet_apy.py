@@ -31,7 +31,9 @@ if __name__ == "__main__":
 
   logger = pl.loggers.TensorBoardLogger(save_dir=args.save_dir, name=args.experiment_name, version=None)
   checkpoint_callback = pl.callbacks.ModelCheckpoint(
-    monitor='val_acc', mode='max', dirpath=os.path.join(args.save_dir, args.experiment_name, 'checkpoint'), verbose=True)
+    monitor='val_acc', mode='max', 
+    dirpath=os.path.join(args.save_dir, args.experiment_name, 'checkpoint'), 
+    verbose=True, save_last=True)
 
   if torch.cuda.is_available():
     print('using gpu')

@@ -138,12 +138,11 @@ class CT_ResNet_aPY(pl.LightningModule):
 
     # TODO - should we normalize the attentions to sum to 1 as they do in the paper?
     # attn went through softmax before, we need to account for that
-    breakpoint()
     norm = target_concept.sum(-1, keepdims=True)    
-    normalized_target_concept = (target_concept / norm).float()
-    n_concepts = normalized_target_concept.shape[-1]
+    normalized_target_concept = (target_concept / norm)
+    n_concepts = self.model.n_concepts
   
-    expl_loss = n_concepts*nn.functional.mse_loss(target_concept, attn)
+    expl_loss = n_concepts*nn.functional.mse_loss(attn, normalized_target_concept)
   
     loss = cls_loss + self.args.expl_coeff*expl_loss
 
