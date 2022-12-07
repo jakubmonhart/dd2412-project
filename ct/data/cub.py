@@ -26,19 +26,32 @@ class CUB_dataset(VisionDataset):
   '''
 
   root = '../data/cub'
-  # url = 'https://data.caltech.edu/records/65de6-vp158/files/CUB_200_2011.tgz?download=1'
   url = 'https://data.deepai.org/CUB200(2011).zip'
   folder_name = 'CUB_200_2011'
-  croped_folder = os.path.join(root, folder_name, 'croped')
+  patches = (14, 14)
   image_folder = os.path.join(root, folder_name, 'images')
   dataset_folder = os.path.join(root, folder_name)
+  attributes_to_retain = [2,5,7,8,11,15,16,21,22,24,25,26,30,31,36,37,39,41,45,46,51,52,54,55,57,58,60,64,70,71,73,
+                            76,81,91,92,102,105,107,111,112,117,118,120,126,127,132,133,135,146,150,152,153,154,158,159,
+                            164,165,166,169,173,179,180,183,184,188,189,194,195,197,203,204,209,210,212,219,221,222,226,
+                            228,236,237,239,241,244,245,249,250,254,255,260,261,263,269,275,278,284,290,293,294,295,299,
+                            300,305,306,307,309,311,312]
+  old2new_attr_id = {}
+  # for i, idx in enumerate(attributes_to_retain):
+  #   old2new_attr_id[idx] = i
+  for i in range(1000):
+    old2new_attr_id[i] = i
+  
+  
 
-  def __init__(self):  
-    super().__init__(root=self.root, transforms=None, target_transform=None)
+  def __init__(self, transform=None, target_transform=None, crop_images=True):  
+    super().__init__(root=self.root)
     if not os.path.isdir(self.root):
       print('Making the Datafolder')
       os.makedirs(self.root)
-    
+    self.transform = transform
+    self.target_transform = target_transform
+    self.crop_images = crop_images
     if os.path.exists(os.path.join(self.root, self.folder_name)):
       print('Dataset folder found. In order to download it, delete the existing folder!')
     else:
@@ -47,76 +60,88 @@ class CUB_dataset(VisionDataset):
       os.remove(os.path.join(self.root, self.folder_name+'.tgz'))
       shutil.move(os.path.join(self.root, 'attributes.txt'), os.path.join(self.root, self.folder_name, 'attributes/attributes.txt'))
 
-    images = pd.read_csv(os.path.join(self.dataset_folder, 'images.txt'), sep=' ',
-                             names=['id', 'path'])
+
+    self.data = self.load_image_data()
+
+    self.parts = self.load_parts()
     
-    labels = pd.read_csv(os.path.join(self.dataset_folder, 'image_class_labels.txt'),
-                                         sep=' ', names=['id', 'target'])
+    self.clean_attributer()
+    self.attributes, self.image_attributes = self.load_attributes(self.parts)
+    self.attr_id2global_id, self.attr_id2local_id = self.make_global_local_attr_id(self.attributes)
     
-    train_test_split = pd.read_csv(os.path.join(self.dataset_folder, 'train_test_split.txt'),
-                                      sep=' ', names=['id', 'is_training'])
-
-    data = images.merge(labels, on='id').merge(train_test_split, on='id')
-
-    bounding_box = pd.read_csv(os.path.join(self.dataset_folder, 'bounding_boxes.txt'), sep=' ',
-                           names=['id', 'x1', 'y1', 'w', 'h'])
-    data = data.merge(bounding_box, on='id')
-
-    parts = pd.read_csv(os.path.join(self.dataset_folder, 'parts', 'part_locs.txt'),
-                            sep=' ', names=['id', 'part_id', 'x', 'y', 'visible'])
-    
-    attr_list, attributes, attr_id2parts = self._load_attributes()
+    # print(self.has2part)
+    # assert False
+    # # attr_id2parts = defaultdict(list)
+    # # for has, part in self.has2part.items():
+    # #     attr_id = attr_list[attr_list['def'].str.split('::').str[0].str.contains(has)].attr_id
+    # #     for k in attr_id:
+    # #         attr_id2parts[k] += part
 
 
-
-
-
-
-    # print(parts.head())
-    print('\n\n\n')
-    print(type(attr_list), type(attributes), type(attr_id2parts))
-    print('\n\n\n')
+    # # print(parts.head())
+    # # print('\n\n\n')
+    # # print(self.data.head())
+    # # print('\n\n\n')
     # img = np.array(Image.open(os.path.join(self.image_folder, data.iloc[10]['path'])))
-    # img[:,int(data.iloc[10]['x1']),:] = 0
-    # img[:, int(data.iloc[10]['x1'] + data.iloc[10]['w']),:] = 0
-    # img[int(data.iloc[10]['y1']),:,:] = 0
-    # img[int(data.iloc[10]['y1'] + data.iloc[10]['h']),:,:] = 0
+    # # img[:,int(data.iloc[10]['x1']),:] = 0
+    # # img[:, int(data.iloc[10]['x1'] + data.iloc[10]['w']),:] = 0
+    # # img[int(data.iloc[10]['y1']),:,:] = 0
+    # # img[int(data.iloc[10]['y1'] + data.iloc[10]['h']),:,:] = 0
     # plt.imshow(img)
     # plt.show()
 
-    if not os.path.exists(self.croped_folder):
-      print('Croping images and saving them!')
-      pass # TODO crop images
-    else:
-      print('Croped foler found!')
+    # if not os.path.exists(self.croped_folder):
+    #   print('Croping images and saving them!')
+    #   pass # TODO crop images
+    # else:
+    #   print('Croped foler found!')
     
+  def load_parts(self):
+    parts_df = pd.read_csv(os.path.join(self.dataset_folder, 'parts', 'part_locs.txt'),
+                            sep=' ', names=['image_id', 'part_id', 'x', 'y', 'visible'])
+    parts_df.set_index(['image_id', 'part_id'], inplace=True)
+    return parts_df
 
+
+  def clean_attributer(self):
+    if os.path.exists(os.path.join(self.dataset_folder, 'attributes/image_attribute_labels_processed.txt')): return
+    with open(os.path.join(self.dataset_folder, 'attributes/image_attribute_labels.txt'), 'r') as original:
+      with open(os.path.join(self.dataset_folder, 'attributes/image_attribute_labels_processed.txt'), 'w') as proc:
+        for line in original:
+          splitted = line.split()
+          if len(splitted) > 5:
+            del splitted[-2]
+          proc.write(' '.join(splitted)+'\n')
+
+ 
+  def load_image_data(self):
+    images = pd.read_csv(os.path.join(self.dataset_folder, 'images.txt'), sep=' ',
+                             names=['image_id', 'path'])
     
-    assert False
-    # TODO - download only if data is not existent. Move attributes.txt inside the folder
-    # # Download dataset
-    # print('Downloading dataset')
-    # download_and_extract_archive(url=self.url, download_root=self.root)
+    labels = pd.read_csv(os.path.join(self.dataset_folder, 'image_class_labels.txt'),
+                                         sep=' ', names=['image_id', 'target'])
+    
+    train_test_split = pd.read_csv(os.path.join(self.dataset_folder, 'train_test_split.txt'),
+                                      sep=' ', names=['image_id', 'is_training'])
 
+    data = images.merge(labels, on='image_id').merge(train_test_split, on='image_id')
 
-    # Read metadata
-    images = pd.read_csv(os.path.join(self.root, 'images.txt'), names=['id', 'filepath'], sep=' ')
-    labels = pd.read_csv(os.path.join(self.root, 'image_class_labels.txt'), names=['id', 'label'], sep=' ')
-
-    self.metadata = images.merge(labels, on='id')
-
-    # Transformation - TODO - move outside?
-    # TODO - Resize target dimension ... is it mentioned in the paper? I've taken the value from the paper implemetation
-    # Normalize using imagenet mean and std (we are using backbones pretrained on imagenet)
-    self.transform = transforms.Compose([
-      transforms.Resize((224, 224)), transforms.ToTensor(),
-      transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+    bounding_box = pd.read_csv(os.path.join(self.dataset_folder, 'bounding_boxes.txt'), sep=' ',
+                           names=['image_id', 'x1', 'y1', 'w', 'h'])
+    data = data.merge(bounding_box, on='image_id')
+    return data
   
-  def _load_attributes(self):
-    # Load list of attributes
-    attr_list = pd.read_csv(os.path.join(self.dataset_folder, 'attributes/attributes.txt'),
+  def load_attributes(self, parts):
+    attributes = pd.read_csv(os.path.join(self.dataset_folder, 'attributes/attributes.txt'),
                             sep=' ', names=['attr_id', 'def'])
-    # Find parts corresponding to each attribute
+    image_attributes = pd.read_csv(os.path.join(self.dataset_folder, 'attributes', 'image_attribute_labels_processed.txt'),
+                              sep=' ', names=['image_id', 'attr_id', 'is_present', 'certainty', 'time'])
+    # removing unused attributes
+    attributes = attributes[attributes.attr_id.isin(self.attributes_to_retain)]
+    attributes['attr_id'].replace(self.old2new_attr_id, inplace=True)
+    image_attributes = image_attributes[image_attributes.attr_id.isin(self.attributes_to_retain)]
+    image_attributes['attr_id'].replace(self.old2new_attr_id, inplace=True)
+    # We used the Authors code for the part below
     has2part = {
         'bill': [2],
         'wing': [9, 13],
@@ -139,34 +164,74 @@ class CUB_dataset(VisionDataset):
     }
     attr_id2parts = defaultdict(list)
     for has, part in has2part.items():
-        # need to check only attribute categories (left of "::" in the source), not attribute category values
-        # see e.g. leg in "225 has_shape::long-legged-like"
-        attr_id = attr_list[attr_list['def'].str.split('::').str[0].str.contains(has)].attr_id
+        attr_id = attributes[attributes['def'].str.split('::').str[0].str.contains(has)].attr_id
         for k in attr_id:
             attr_id2parts[k] += part
+    attributes['part'] = attributes.attr_id.map(attr_id2parts)
+    image_attributes['part'] = image_attributes.attr_id.map(attr_id2parts)
+    self.num_global_attr = attributes['part'].value_counts()[[0]].item()
+    self.num_local_attr = len(attributes) - self.num_global_attr
+    return attributes, image_attributes
 
-    # Load attributes of each image
-    attributes = pd.read_csv(os.path.join(self.dataset_folder, 'attributes', 'image_attribute_labels.txt'),
-                              sep=' ', names=['id', 'attr_id', 'is_present', 'certainty', 'time'])
-    attributes.img_id = attributes.img_id.astype(int)
-    attributes.attr_id = attributes.attr_id.astype(int)
-    attributes.is_present = attributes.is_present.astype(int)
-    return attr_list, attributes, attr_id2parts
-
+  def make_global_local_attr_id(self, attributes):
+    attr_id2global_id = {}
+    attr_id2local_id = {}
+    for _, row in attributes.iterrows():
+      if row['part'] == [0]:
+        attr_id2global_id[row['attr_id']] = len(attr_id2global_id)
+      else:
+        attr_id2local_id[row['attr_id']] = len(attr_id2local_id)
+    return attr_id2global_id, attr_id2local_id
+  
+  def _get_patch_number(self,image, x, y):
+        patch_x = int(x * self.patches[1] / image.shape[1])
+        patch_y = int(y * self.patches[0] / image.shape[0])
+        return patch_x + (patch_y * self.patches[0])
+  
   def __getitem__(self, index):
     '''
     Returns: 
       tuple: (image, label) where image is torch.Tensor in (..., C, H, W) shape - channels first
     '''
 
-    image_metadata = self.metadata.loc[index]
-    path = os.path.join(self.root, 'images', image_metadata.filepath)
-    image = default_loader(path) # Image is loaded as PIL
-    label = image_metadata.label - 1 # Shift label to [0,N_CLASSES-1]
+    image_metadata = self.data.loc[index]
+    image_attributes = self.image_attributes[self.image_attributes['image_id'] == image_metadata['image_id']]
+    image = np.array(Image.open(os.path.join(self.image_folder, image_metadata['path']))) # Image is loaded as PIL
+    label = image_metadata.target - 1
+    # print(image_metadata)
+    # print(image_attributes)
+    # print(image_parts)
+    x_subtract = 0
+    y_subtract = 0
+    if self.crop_images:
+      x_subtract = image_metadata.x1
+      y_subtract = image_metadata.y1
+      image = image[int(image_metadata.y1):int(image_metadata.y1 + image_metadata.h), int(image_metadata.x1):int(image_metadata.x1 + image_metadata.w),:]
+    if not self.transform is None:
+      image = self.transform(image) # One of the transformation casts the image from PIL to torch.Tensor
 
-    image = self.transform(image) # One of the transformation casts the image from PIL to torch.Tensor
-  
-    return image, label
+    expl = torch.FloatTensor(self.num_global_attr).fill_(float('nan'))
+    spatial_expl = torch.FloatTensor(self.patches[0]*self.patches[1], self.num_local_attr).fill_(float('nan'))
+    for index, row in image_attributes.iterrows():
+      # print(row)
+      # print('\n') 
+      if row['is_present'] == 0:
+        continue     
+      if row['part'] == [0]:
+        expl[self.attr_id2global_id[row.attr_id]] = row['is_present']
+        expl[expl != expl] = 0 # selects only nan rows
+        continue
+      for p in row['part']:
+        x = self.parts.loc[row['image_id'], p].x - x_subtract
+        y = self.parts.loc[row['image_id'], p].y - y_subtract
+        if x < 0 or y < 0 or x >= image.shape[1] or y >= image.shape[0]: continue
+        patch_id = self._get_patch_number(image, 
+                            x,
+                            y)
+        spatial_expl[patch_id, self.attr_id2local_id[row.attr_id]] = row['is_present']
+        spatial_expl[patch_id][spatial_expl[patch_id] != spatial_expl[patch_id]] = 0
+
+    return image, expl, spatial_expl, label
 
   def __len__(self):
     return len(self.metadata)
@@ -201,4 +266,11 @@ class CUB(LightningDataModule):
   
 
 if __name__ == '__main__':
-  dataset = CUB_dataset()
+  dataset = CUB_dataset(crop_images=True)
+  image, expl, spatial_expl, label = dataset[1]
+  print(expl)
+  print(image.shape)
+  print(label)
+  for i, r in enumerate(spatial_expl):
+    if torch.isnan(r).sum() == 0:
+      print(i, r.sum())
