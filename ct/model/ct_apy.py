@@ -151,10 +151,16 @@ class CT_aPY(pl.LightningModule):
   def configure_optimizers(self):
     optimizer = optim.AdamW(self.parameters(), lr=self.args.lr)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-      optimizer, self.args.warmup_epochs)
-
-    if self.args.scheduler:
-      return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
-    else:
+    if self.args.scheduler == 'none':
       return [optimizer]
+    
+    elif self.args.scheduler == 'cosine':
+      scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+          optimizer, T_max=self.args.epochs, verbose=True)
+      return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
+    
+    elif self.args.scheduler == 'cosine_restart':
+      scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=self.args.warmup_epochs, verbose=True)
+      return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
+      

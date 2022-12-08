@@ -12,9 +12,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
 parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
 parser.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
-parser.add_argument("--use_scheduler", action='store_true', help="Use cosine scheduler with warm restarts.")
-parser.set_defaults(scheduler=False)
-parser.add_argument("--warmup_epochs", default=10, type=int, help="Number of warmup epochs for cosine scheduler.") # TODO - not mentioned in paper, but they use it for CUB dataset, might help with learning.
+parser.add_argument("--scheduler", default='none', type=str, help="Specify scheduler.")
+parser.add_argument("--warmup_epochs", default=20, type=int, help="Number of warmup epochs for cosine scheduler.") # TODO - not mentioned in paper, but they use it for CUB dataset, might help with learning.
 parser.add_argument("--loss_weight", action='store_true', help="Use weighted CE loss (Classes are inbalanced).")
 parser.set_defaults(loss_weight=False)
 parser.add_argument("--dim", default=512, type=int, help="Embedding dimnesion of CCT and CT.")
