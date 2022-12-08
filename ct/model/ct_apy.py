@@ -150,4 +150,11 @@ class CT_aPY(pl.LightningModule):
 
   def configure_optimizers(self):
     optimizer = optim.AdamW(self.parameters(), lr=self.args.lr)
-    return optimizer
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+      optimizer, self.args.warmup_epochs)
+
+    if self.args.scheduler:
+      return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
+    else:
+      return [optimizer]
