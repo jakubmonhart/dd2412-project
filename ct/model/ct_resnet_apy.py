@@ -79,6 +79,7 @@ class CT_ResNet_aPY(pl.LightningModule):
 
     # Accuracy
     self.train_accuracy(pred_class, target_class.int())
+    self.log('train_loss', loss)
     self.log('train_cls_loss', cls_loss)
     self.log('train_expl_loss', expl_loss, prog_bar=True)
     self.log('train_acc', self.train_accuracy, prog_bar=True)
