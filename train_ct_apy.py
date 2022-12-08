@@ -20,9 +20,6 @@ parser.add_argument("--cct_n_heads", default=4, type=int, help="Number attention
 parser.add_argument("--cct_mlp_ratio", default=1.0, type=float, help="Sets size (relative to embedding dimension) of forward dimension of TransformerEncoderLayer in CCT.")
 parser.add_argument("--num_heads", default=2, type=int, help="Number attention heads in CT.")
 parser.add_argument("--expl_coeff", default=0.0, type=float, help="Influence of explanation loss (concepts prediction).")
-parser.add_argument("--normalise_attn", action='store_true', help="Normalize attention to sum to 1 before computing explanation loss.") # TODO - implement?
-parser.set_defaults(normalise_attn=False)
-
 
 if __name__ == "__main__":
   args = parser.parse_args()
