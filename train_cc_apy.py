@@ -16,12 +16,25 @@ parser.add_argument("--loss_weight", action='store_true', help="Use weighted CE 
 parser.set_defaults(loss_weight=False)
 parser.add_argument("--resnet", default='50', type=str, help="Resnet backbone version.")
 parser.add_argument("--expl_coeff", default=0.0, type=float, help="Influence of explanation loss (concepts prediction).")
+parser.add_argument("--note", default="", type=str, help="Experiment note.")
+parser.add_argument("--dropout", default=0.0, type=float, help="Droupout rate.")
 
 if __name__ == "__main__":
   args = parser.parse_args()
 
+  args.experiment_name = "{}-{}".format(
+    datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+    ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", k), v) for k, v in sorted(vars(args).items()))))
+  args.save_dir = 'logs/cc_apy'
+
   apy = aPY(batch_size=args.batch_size)
   model = CC_aPY(args)
+
+  logger = pl.loggers.TensorBoardLogger(save_dir=args.save_dir, name=args.experiment_name, version=None)
+  checkpoint_callback = pl.callbacks.ModelCheckpoint(
+    monitor='val_acc', mode='max',
+    dirpath=os.path.join(args.save_dir, args.experiment_name, 'checkpoint'),
+    verbose=True, save_last=True)
 
   if torch.cuda.is_available():
     print('using gpu')
@@ -29,6 +42,7 @@ if __name__ == "__main__":
   else:
     accelerator = None
 
-  trainer = pl.Trainer(max_epochs=args.epochs, logger=None, accelerator=accelerator, devices=1)
+  trainer = pl.Trainer(max_epochs=args.epochs, logger=logger, accelerator=accelerator, callbacks=[checkpoint_callback], devices=1)
   
   trainer.fit(model=model, datamodule=apy)
+  trainer.test(model=model, datamodule=apy)

@@ -248,7 +248,7 @@ class aPY(pl.LightningDataModule):
     # Create val only to get the indices easily, now create actual val with val_transform
     self.val = data.Subset(dataset=val_full, indices=val.indices)
     
-    self.test = train_full = aPY_torchvision(
+    self.test = aPY_torchvision(
       train=False, transform=val_transform, yahoo=self.yahoo, data_path=self.data_path)
 
   def train_dataloader(self):

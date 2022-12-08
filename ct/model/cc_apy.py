@@ -20,7 +20,7 @@ class CC_aPY_torch(nn.Module):
   n_classes = 20
   n_concepts = 64
 
-  def __init__(self, resnet='50'):
+  def __init__(self, resnet='50', dropout=0):
     super().__init__()
     
     # Backbone
@@ -37,12 +37,23 @@ class CC_aPY_torch(nn.Module):
     self.feature_extractor = nn.Sequential(*layers)
 
     # Concept Classifier
-    self.concept_classifier = nn.Linear(dim, self.n_concepts)
+    self.concept_classifier = nn.Sequential(
+      nn.Dropout(p=dropout),
+      nn.Linear(dim, dim),
+      nn.Dropout(p=dropout),
+      nn.ReLU(),
+      nn.Linear(dim, self.n_concepts)
+    )
 
     # Class Classifier
-    self.class_classifier = nn.Linear(self.n_concepts, self.n_classes)
-
-    self.relu = nn.ReLU()
+    self.class_classifier = nn.Sequential(
+      nn.Dropout(p=dropout),
+      nn.ReLU(),
+      nn.Linear(self.n_concepts, dim),
+      nn.Dropout(p=dropout),
+      nn.ReLU(),
+      nn.Linear(dim, self.n_classes)
+    )
 
   def forward(self, x):
     """
@@ -54,7 +65,7 @@ class CC_aPY_torch(nn.Module):
     x = torch.flatten(x, 1)
     pred_concept = self.concept_classifier(x)
 
-    pred_class = self.class_classifier(self.relu(pred_concept))
+    pred_class = self.class_classifier(pred_concept)
     
     pred_concept = pred_concept.softmax(dim=-1) # In Concept Transformer, attn output also goes through softmax
     return pred_class, pred_concept
@@ -69,7 +80,7 @@ class CC_aPY(pl.LightningModule):
     self.args = args
     self.save_hyperparameters()
   
-    self.model = CC_aPY_torch(resnet=args.resnet)
+    self.model = CC_aPY_torch(resnet=args.resnet, dropout=args.dropout)
 
     class_counts = [183, 161, 254, 228, 296, 73, 528, 187, 446, 103, 113, 244, 153, 149, 2488, 225, 123, 121, 90, 150]
     class_counts = torch.tensor(class_counts)
