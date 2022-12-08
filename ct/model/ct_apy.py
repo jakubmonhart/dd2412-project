@@ -57,7 +57,7 @@ class CT_aPY(pl.LightningModule):
   
     self.model = CT_aPY_torch(
       dim=args.dim, cct_n_layers=args.cct_n_layers, cct_n_heads=args.cct_n_heads,
-      cct_mlp_ratio=args.cct_mlp_ratio, num_heads=args.num_heads)
+      cct_mlp_ratio=args.cct_mlp_ratio, num_heads=args.num_heads, resnet=args.resnet)
 
     class_counts = [183, 161, 254, 228, 296, 73, 528, 187, 446, 103, 113, 244, 153, 149, 2488, 225, 123, 121, 90, 150]
     class_counts = torch.tensor(class_counts)
@@ -78,6 +78,7 @@ class CT_aPY(pl.LightningModule):
 
     # Accuracy
     self.train_accuracy(pred_class, target_class.int())
+    self.log('train_loss', loss)
     self.log('train_cls_loss', cls_loss)
     self.log('train_expl_loss', expl_loss, prog_bar=True)
     self.log('train_acc', self.train_accuracy, prog_bar=True)
