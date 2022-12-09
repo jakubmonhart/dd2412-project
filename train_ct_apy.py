@@ -49,5 +49,12 @@ if __name__ == "__main__":
 
   trainer = pl.Trainer(max_epochs=args.epochs, logger=logger, accelerator=accelerator, devices=1, callbacks=[checkpoint_callback])
 
+  print("training ...")
   trainer.fit(model=model, datamodule=apy)
+  
+  print("testing with last model ...")
+  trainer.test(model=model, datamodule=apy)
+
+  print("testing with best model ...")
+  model = CT_aPY.load_from_checkpoint(checkpoint_callback.best_model_path)
   trainer.test(model=model, datamodule=apy)
