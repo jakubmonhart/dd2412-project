@@ -261,8 +261,8 @@ class aPY(pl.LightningDataModule):
   def val_dataloader(self):
     return data.DataLoader(self.val, batch_size=self.batch_size)
 
-  def test_dataloader(self):
-    return data.DataLoader(self.test, batch_size=self.batch_size, shuffle=True)
+  def test_dataloader(self, shuffle=False):
+    return data.DataLoader(self.test, batch_size=self.batch_size, shuffle=shuffle)
 
 
 if __name__ == '__main__':
