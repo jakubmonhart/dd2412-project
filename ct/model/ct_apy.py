@@ -34,6 +34,8 @@ class CT_aPY_torch(nn.Module):
     self.concept_transformer = ConceptTransformer(
       n_concepts=self.n_concepts, dim=dim, n_classes=self.n_classes, num_heads=num_heads)
 
+    self.test_mode = 'last'
+
   def forward(self, images):
     """
     inputs:
@@ -108,10 +110,10 @@ class CT_aPY(pl.LightningModule):
 
     # Accuracy
     self.test_accuracy(pred_class, target_class.int())
-    self.log('test_cls_loss', cls_loss)
-    self.log('test_expl_loss', expl_loss)
-    self.log('test_acc', self.test_accuracy, prog_bar=True)
-    self.log('test_loss', loss)
+    self.log('test_cls_loss' + self.test_mode, cls_loss)
+    self.log('test_expl_loss' + self.test_mode, expl_loss)
+    self.log('test_acc' + self.test_mode, self.test_accuracy, prog_bar=True)
+    self.log('test_loss' + self.test_mode, loss)
 
   def predict_step(self, batch, batch_idx=None):
     image, (target_class, target_concept) = batch

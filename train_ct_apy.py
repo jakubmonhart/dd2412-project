@@ -57,4 +57,5 @@ if __name__ == "__main__":
 
   print("testing with best model ...")
   model = CT_aPY.load_from_checkpoint(checkpoint_callback.best_model_path)
+  model.test_mode = 'best'
   trainer.test(model=model, datamodule=apy)
