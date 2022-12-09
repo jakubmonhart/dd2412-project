@@ -77,7 +77,11 @@ class aPY_torchvision(VisionDataset):
       self.create_objects(train=False)
 
     # Use only apascal data
-    if not self.yahoo:
+    if self.yahoo:
+      self.test_df = ayahoo_test_df.reset_index()
+      self.yahoo_index_offset = len(apascal_test_df)
+      self.test_df.index = self.test_df.index + self.yahoo_index_offset
+    else:  
       self.test_df = apascal_test_df.reset_index()
 
     # Train or test
@@ -109,7 +113,7 @@ class aPY_torchvision(VisionDataset):
 
   def __getitem__(self, index):
     
-    item_data = self.df.loc[index]
+    item_data = self.df.iloc[index]
 
     # Load image
     with open(os.path.join(self.im_folder, '{:d}.jpg'.format(self.df.index[index])), "rb") as f:
@@ -258,7 +262,7 @@ class aPY(pl.LightningDataModule):
     return data.DataLoader(self.val, batch_size=self.batch_size)
 
   def test_dataloader(self):
-    return data.DataLoader(self.test, batch_size=self.batch_size)
+    return data.DataLoader(self.test, batch_size=self.batch_size, shuffle=True)
 
 
 if __name__ == '__main__':

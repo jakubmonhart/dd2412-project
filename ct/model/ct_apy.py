@@ -120,6 +120,15 @@ class CT_aPY(pl.LightningModule):
     attn = attn.squeeze(2)
     attn = torch.mean(attn, dim=1)
 
+    return target_class, target_concept, pred_class, attn
+
+  def my_predict_step(self, batch, batch_idx=None):
+    image, (target_class, target_concept) = batch
+    pred_class, attn = self.model(image)
+    pred_class = pred_class.argmax(dim=-1)
+    attn = attn.squeeze(2)
+    attn = torch.mean(attn, dim=1)
+
     # Unnormalize
     image = torchvision.transforms.functional.normalize(image, mean=(0, 0, 0), std=(1/0.229, 1/0.224, 1/0.225))
     image = torchvision.transforms.functional.normalize(image, mean=(-0.485, -0.456, -0.406), std=(1, 1, 1))
