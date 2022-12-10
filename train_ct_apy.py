@@ -12,6 +12,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
 parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
 parser.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
+parser.add_argument("--scheduler", default='none', type=str, help="Specify scheduler.")
+parser.add_argument("--warmup_epochs", default=20, type=int, help="Number of warmup epochs for cosine scheduler.") # TODO - not mentioned in paper, but they use it for CUB dataset, might help with learning.
 parser.add_argument("--loss_weight", action='store_true', help="Use weighted CE loss (Classes are inbalanced).")
 parser.set_defaults(loss_weight=False)
 parser.add_argument("--dim", default=512, type=int, help="Embedding dimnesion of CCT and CT.")
@@ -47,5 +49,13 @@ if __name__ == "__main__":
 
   trainer = pl.Trainer(max_epochs=args.epochs, logger=logger, accelerator=accelerator, devices=1, callbacks=[checkpoint_callback])
 
+  print("training ...")
   trainer.fit(model=model, datamodule=apy)
+  
+  print("testing with last model ...")
+  trainer.test(model=model, datamodule=apy)
+
+  print("testing with best model ...")
+  model = CT_aPY.load_from_checkpoint(checkpoint_callback.best_model_path)
+  model.test_mode = 'best'
   trainer.test(model=model, datamodule=apy)
