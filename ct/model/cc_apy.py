@@ -91,6 +91,8 @@ class CC_aPY(pl.LightningModule):
     self.val_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes, top_k=1)
     self.test_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes, top_k=1)
 
+    self.test_mode = 'last'
+
   def training_step(self, batch, batch_idx):
     image, (target_class, target_concept) = batch
     pred_class, attn = self.model(image)
@@ -129,12 +131,21 @@ class CC_aPY(pl.LightningModule):
 
     # Accuracy
     self.test_accuracy(pred_class, target_class.int())
-    self.log('test_acc', self.test_accuracy, prog_bar=True)
-    self.log('test_cls_loss', cls_loss)
-    self.log('test_expl_loss', expl_loss, prog_bar=True)
-    self.log('test_loss', loss)
+    self.log('test_cls_loss_' + self.test_mode, cls_loss)
+    self.log('test_expl_loss_' + self.test_mode, expl_loss)
+    self.log('test_acc_' + self.test_mode, self.test_accuracy, prog_bar=True)
+    self.log('test_loss_' + self.test_mode, loss)
 
   def predict_step(self, batch, batch_idx=None):
+    image, (target_class, target_concept) = batch
+    pred_class, attn = self.model(image)
+    pred_class = pred_class.argmax(dim=-1)
+    attn = attn.squeeze(2)
+    attn = torch.mean(attn, dim=1)
+
+    return target_class, target_concept, pred_class, attn
+
+  def my_predict_step(self, batch, batch_idx=None):
     image, (target_class, target_concept) = batch
     pred_class, attn = self.model(image)
     pred_class = pred_class.argmax(dim=-1)
@@ -167,4 +178,16 @@ class CC_aPY(pl.LightningModule):
 
   def configure_optimizers(self):
     optimizer = optim.AdamW(self.parameters(), lr=self.args.lr)
-    return optimizer
+
+    if self.args.scheduler == 'none':
+      return [optimizer]
+    
+    elif self.args.scheduler == 'cosine':
+      scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+          optimizer, T_max=self.args.epochs, verbose=True)
+      return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
+    
+    elif self.args.scheduler == 'cosine_restart':
+      scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=self.args.warmup_epochs, verbose=True)
+      return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
