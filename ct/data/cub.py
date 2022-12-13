@@ -16,7 +16,25 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
+import albumentations as A
+from albumentations.augmentations.geometric.resize import Resize
+from albumentations.augmentations.geometric.rotate import Rotate
+from albumentations.augmentations.transforms import Normalize
+from albumentations.pytorch.transforms import ToTensorV2
+from torch.utils.data import random_split
 
+
+def display_image_and_key_points(img, kpts, move_axis=False):
+  print(img.shape)
+  if move_axis:
+    img = np.moveaxis(img, 0, -1)
+  print(img.shape)
+  for kp in kpts:
+    if kp[2] == 0 or kp[0] < 0 or kp[1] < 0:
+      continue
+    img[int(kp[1]-2):int(kp[1]+2), int(kp[0]-2):int(kp[0]+2), :] = 0
+  plt.imshow(img)
+  plt.show()
 
 class CUB_dataset(VisionDataset):
   '''
@@ -44,7 +62,7 @@ class CUB_dataset(VisionDataset):
   
   
 
-  def __init__(self, transform=None, target_transform=None, crop_images=True):  
+  def __init__(self, transform=None, target_transform=None, crop_images=True, is_test=False):  
     super().__init__(root=self.root)
     if not os.path.isdir(self.root):
       print('Making the Datafolder')
@@ -52,6 +70,7 @@ class CUB_dataset(VisionDataset):
     self.transform = transform
     self.target_transform = target_transform
     self.crop_images = crop_images
+    self.transform = transform
     if os.path.exists(os.path.join(self.root, self.folder_name)):
       print('Dataset folder found. In order to download it, delete the existing folder!')
     else:
@@ -68,33 +87,14 @@ class CUB_dataset(VisionDataset):
     self.clean_attributer()
     self.attributes, self.image_attributes = self.load_attributes(self.parts)
     self.attr_id2global_id, self.attr_id2local_id = self.make_global_local_attr_id(self.attributes)
+    if is_test:
+      self.data = self.data[self.data.is_training == 0]
+    else:
+      self.data = self.data[self.data.is_training == 1]
     
-    # print(self.has2part)
-    # assert False
-    # # attr_id2parts = defaultdict(list)
-    # # for has, part in self.has2part.items():
-    # #     attr_id = attr_list[attr_list['def'].str.split('::').str[0].str.contains(has)].attr_id
-    # #     for k in attr_id:
-    # #         attr_id2parts[k] += part
+    self.data.reset_index(drop=True, inplace=True)
 
-
-    # # print(parts.head())
-    # # print('\n\n\n')
-    # # print(self.data.head())
-    # # print('\n\n\n')
-    # img = np.array(Image.open(os.path.join(self.image_folder, data.iloc[10]['path'])))
-    # # img[:,int(data.iloc[10]['x1']),:] = 0
-    # # img[:, int(data.iloc[10]['x1'] + data.iloc[10]['w']),:] = 0
-    # # img[int(data.iloc[10]['y1']),:,:] = 0
-    # # img[int(data.iloc[10]['y1'] + data.iloc[10]['h']),:,:] = 0
-    # plt.imshow(img)
-    # plt.show()
-
-    # if not os.path.exists(self.croped_folder):
-    #   print('Croping images and saving them!')
-    #   pass # TODO crop images
-    # else:
-    #   print('Croped foler found!')
+    
     
   def load_parts(self):
     parts_df = pd.read_csv(os.path.join(self.dataset_folder, 'parts', 'part_locs.txt'),
@@ -189,32 +189,26 @@ class CUB_dataset(VisionDataset):
         return patch_x + (patch_y * self.patches[0])
   
   def __getitem__(self, index):
-    '''
-    Returns: 
-      tuple: (image, label) where image is torch.Tensor in (..., C, H, W) shape - channels first
-    '''
-
     image_metadata = self.data.loc[index]
     image_attributes = self.image_attributes[self.image_attributes['image_id'] == image_metadata['image_id']]
     image = np.array(Image.open(os.path.join(self.image_folder, image_metadata['path']))) # Image is loaded as PIL
     label = image_metadata.target - 1
-    # print(image_metadata)
-    # print(image_attributes)
-    # print(image_parts)
-    x_subtract = 0
-    y_subtract = 0
+    image_parts = self.parts.loc[image_metadata['image_id']].copy()
     if self.crop_images:
-      x_subtract = image_metadata.x1
-      y_subtract = image_metadata.y1
-      image = image[int(image_metadata.y1):int(image_metadata.y1 + image_metadata.h), int(image_metadata.x1):int(image_metadata.x1 + image_metadata.w),:]
-    if not self.transform is None:
-      image = self.transform(image) # One of the transformation casts the image from PIL to torch.Tensor
-
+      values = image_parts.values
+      values[:, 0] -= image_metadata.x1
+      values[:, 1] -=image_metadata.y1
+      image_parts.iloc[:] = values
+      image = image[int(image_metadata.y1):int(image_metadata.y1 + image_metadata.h), int(image_metadata.x1):int(image_metadata.x1 + image_metadata.w), :]
     expl = torch.FloatTensor(self.num_global_attr).fill_(float('nan'))
     spatial_expl = torch.FloatTensor(self.patches[0]*self.patches[1], self.num_local_attr).fill_(float('nan'))
-    for index, row in image_attributes.iterrows():
-      # print(row)
-      # print('\n') 
+    if not self.transform is None:
+      values = image_parts.values[:, :2]
+      transformed = self.transform(image=image, keypoints=values)
+      image = transformed['image']
+      values = np.array(transformed['keypoints'])
+      image_parts.loc[:, 'x':'y'] = values
+    for _, row in image_attributes.iterrows():
       if row['is_present'] == 0:
         continue     
       if row['part'] == [0]:
@@ -222,55 +216,74 @@ class CUB_dataset(VisionDataset):
         expl[expl != expl] = 0 # selects only nan rows
         continue
       for p in row['part']:
-        x = self.parts.loc[row['image_id'], p].x - x_subtract
-        y = self.parts.loc[row['image_id'], p].y - y_subtract
+        x = image_parts.loc[p].x
+        y = image_parts.loc[p].y
         if x < 0 or y < 0 or x >= image.shape[1] or y >= image.shape[0]: continue
-        patch_id = self._get_patch_number(image, 
-                            x,
-                            y)
+        patch_id = self._get_patch_number(image, x, y)
         spatial_expl[patch_id, self.attr_id2local_id[row.attr_id]] = row['is_present']
         spatial_expl[patch_id][spatial_expl[patch_id] != spatial_expl[patch_id]] = 0
 
-    return image, expl, spatial_expl, label
+    return {
+      'image': image,
+      'global_context': expl,
+      'local_context': spatial_expl,
+      'label': label
+    }
 
   def __len__(self):
-    return len(self.metadata)
+    return len(self.data)
+
 
 
 class CUB(LightningDataModule):
-  def __init__(self):
+  def __init__(self, batch_size=32, num_workers=4, val_size=0.1):
     super().__init__()
+    self.train_transform = A.Compose([Resize(224, 224),
+                                  A.HorizontalFlip(p=0.5),
+                                  Rotate(limit=(-30,30),p=1.0),
+                                  Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                                  ToTensorV2()],
+                                keypoint_params = A.KeypointParams(format='xy', remove_invisible=False))
+    self.test_transform = A.Compose([Resize(224, 224),
+                                  Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                                  ToTensorV2()],
+                                keypoint_params = A.KeypointParams(format='xy', remove_invisible=False))
+    self.batch_size = batch_size
+    self.num_workers = num_workers
+    self.val_size = val_size
 
-    self.batch_size = 8
-
-  def prepare_data(self):
-    # TODO - download here
-    pass
   
-  def setup(self, stage):
-    self.train = CUB_dataset()
-    self.val = CUB_dataset()
-    self.test = CUB_dataset()
+  
+  def setup(self, stage=None):
+    self.train = CUB_dataset(transform=self.train_transform, is_test=False)
+    self.test = CUB_dataset(transform=self.test_transform, is_test=True)
+    val_size = int(self.val_size * len(self.train))
+    self.train, self.val = random_split(self.train, lengths=[len(self.train) - val_size, val_size])
+
 
   def train_dataloader(self):
-    return DataLoader(self.train, batch_size=self.batch_size)
+    return DataLoader(self.train, batch_size=self.batch_size, num_workers=self.num_workers)
 
   def val_dataloader(self):
-    return DataLoader(self.val, batch_size=self.batch_size)
+    return DataLoader(self.val, batch_size=self.batch_size, num_workers=self.num_workers)
 
   def test_dataloader(self):
-    return DataLoader(self.test, batch_size=self.batch_size)
-
-
+    return DataLoader(self.test, batch_size=self.batch_size, num_workers=self.num_workers)
 
   
 
 if __name__ == '__main__':
-  dataset = CUB_dataset(crop_images=True)
-  image, expl, spatial_expl, label = dataset[1]
-  print(expl)
-  print(image.shape)
-  print(label)
-  for i, r in enumerate(spatial_expl):
-    if torch.isnan(r).sum() == 0:
-      print(i, r.sum())
+
+  cub = CUB(32, 0)
+  cub.setup()
+  print(len(cub.train), len(cub.test), len(cub.val))
+  loader = cub.train_dataloader()
+  for batch in loader:
+    print(type(batch))
+    for k in batch.keys():
+      print(batch[k].shape)
+  
+
+  # dataset_train = CUB_dataset(crop_images=True, transform=train_transform, is_test=False)
+  # print(len(dataset_train), len(dataset_test))
+  
