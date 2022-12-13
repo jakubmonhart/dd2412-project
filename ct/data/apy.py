@@ -7,7 +7,6 @@ from tqdm import tqdm
 import torch
 from torch.utils import data
 
-import torchvision
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.utils import download_and_extract_archive
 from torchvision import transforms
@@ -19,16 +18,15 @@ class aPY_torchvision(VisionDataset):
   attributes_url = 'http://vision.cs.uiuc.edu/attributes/attribute_data.tar.gz'
   pascal_url = 'http://host.robots.ox.ac.uk/pascal/VOC/voc2008/VOCtrainval_14-Jul-2008.tar'
   yahoo_url = 'http://vision.cs.uiuc.edu/attributes/ayahoo_test_images.tar.gz'
-  root = 'data/apy'
-  raw_folder = 'data/apy/raw'
 
-
-  def __init__(self, download=False, train=True, yahoo=False, transform=None):
+  def __init__(self, download=False, train=True, yahoo=False, transform=None, data_path='data'):
     '''
     Args:
       yahoo (bool): include yahoo test dataset (that corresponds to the aPY dataset) if True, otherwise test only on aPascal test set. 
     '''
 
+    self.root = os.path.join(data_path, 'apy')
+    self.raw_folder = os.path.join(self.root, 'raw')
     self.train = train
     self.yahoo = yahoo
     self.transform = transform
@@ -79,7 +77,11 @@ class aPY_torchvision(VisionDataset):
       self.create_objects(train=False)
 
     # Use only apascal data
-    if not self.yahoo:
+    if self.yahoo:
+      self.test_df = ayahoo_test_df.reset_index()
+      self.yahoo_index_offset = len(apascal_test_df)
+      self.test_df.index = self.test_df.index + self.yahoo_index_offset
+    else:  
       self.test_df = apascal_test_df.reset_index()
 
     # Train or test
@@ -91,18 +93,27 @@ class aPY_torchvision(VisionDataset):
       self.df = self.test_df
 
     # Load class2id
-    classes = pd.read_csv('data/apy/class_names.txt', header=None)[0].values
+    classes = pd.read_csv(os.path.join(self.root, 'class_names.txt'), header=None)[0].values
     class2id = dict()
     for i, c in enumerate(classes):
       class2id[c] = i
     self.class2id = class2id
+    
+    # Create id2class
+    self.id2class = [None]*len(class2id)
+    for k in class2id.keys():
+      self.id2class[class2id[k]] = k
+
+    # Load id2attribute
+    id2attribute = pd.read_csv(os.path.join(self.root, 'attribute_names.txt'), header=None)
+    self.id2attribute = id2attribute.loc[:, 0].values
 
   def __len__(self):
     return len(self.df)
 
   def __getitem__(self, index):
     
-    item_data = self.df.loc[index]
+    item_data = self.df.iloc[index]
 
     # Load image
     with open(os.path.join(self.im_folder, '{:d}.jpg'.format(self.df.index[index])), "rb") as f:
@@ -200,36 +211,49 @@ class aPY(pl.LightningDataModule):
     - Stratify train/val split?
   """
 
-  def __init__(self, batch_size, image_size=232, yahoo=False, seed=42):
+  def __init__(self, batch_size, image_size=224, yahoo=False, seed=42, data_path='data'):
     super().__init__()
+    self.data_path = data_path
     self.batch_size = batch_size
     self.image_size = image_size
     self.yahoo = yahoo
     self.seed = seed
     
   def prepare_data(self):
-    aPY_torchvision(download=True)
+    aPY_torchvision(download=True, data_path=self.data_path)
   
   def setup(self, stage=None):
     # For reproducibility
     self.generator = torch.Generator().manual_seed(self.seed)
     
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
       transforms.Resize(size=(self.image_size, self.image_size)),
-      transforms.ToTensor(), 
+      transforms.RandomHorizontalFlip(p=0.5),
+      transforms.RandomRotation(degrees=15),
+      transforms.ToTensor(),
       transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
-    train_full = aPY_torchvision(train=True, transform=transform)
+    val_transform = transforms.Compose([
+      transforms.Resize(size=(self.image_size, self.image_size)),
+      transforms.ToTensor(),
+      transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    ])
+
+    train_full = aPY_torchvision(train=True, transform=train_transform, data_path=self.data_path)
+    val_full = aPY_torchvision(train=True, transform=val_transform, data_path=self.data_path)
     
     train_len = round(0.9*len(train_full))
     val_len = len(train_full) - train_len
 
-    self.train, self.val = data.random_split(
+    self.train, val = data.random_split(
       train_full, lengths=[train_len, val_len], generator=self.generator)
     
-    self.test = train_full = aPY_torchvision(
-      train=False, transform=transform, yahoo=self.yahoo)
+    # Create val only to get the indices easily, now create actual val with val_transform
+    self.val = data.Subset(dataset=val_full, indices=val.indices)
+    
+    self.test = aPY_torchvision(
+      train=False, transform=val_transform, yahoo=self.yahoo, data_path=self.data_path)
 
   def train_dataloader(self):
     return data.DataLoader(self.train, batch_size=self.batch_size, shuffle=True, generator=self.generator)
@@ -237,8 +261,8 @@ class aPY(pl.LightningDataModule):
   def val_dataloader(self):
     return data.DataLoader(self.val, batch_size=self.batch_size)
 
-  def test_dataloader(self):
-    return data.DataLoader(self.test, batch_size=self.batch_size)
+  def test_dataloader(self, shuffle=False):
+    return data.DataLoader(self.test, batch_size=self.batch_size, shuffle=shuffle)
 
 
 if __name__ == '__main__':

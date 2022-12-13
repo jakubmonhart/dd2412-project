@@ -1,3 +1,7 @@
+"""
+Concept Classifier for aPY dataset
+"""
+
 import torch
 from torch import nn, optim
 import pytorch_lightning as pl
@@ -5,7 +9,6 @@ import torchmetrics
 import torch.nn.functional as F
 import torchvision
 
-from .cct import CCT_ResNet_torch
 from .ct import ConceptTransformer
 
 import logging
@@ -13,41 +16,63 @@ import logging
 logging.getLogger("lightning").setLevel(logging.ERROR)
 
 
-class CT_aPY_torch(nn.Module):
+class CC_aPY_torch(nn.Module):
   n_classes = 20
   n_concepts = 64
-  image_size = 224
 
-  """
-  cct_n_heads: number of heads of attention inside Compact Transformer (cct)
-  num_heads: number of heads of cross-attention inside Concept Transformer (ct)
-  """
-
-  def __init__(self, dim, cct_n_layers, cct_n_heads, cct_mlp_ratio, num_heads, resnet='50'):
+  def __init__(self, resnet='50', dropout=0):
     super().__init__()
     
-    self.cct = CCT_ResNet_torch(
-      img_size=self.image_size, n_input_channels=3, num_layers=cct_n_layers, num_heads=cct_n_heads,
-      embedding_dim=dim, num_classes=self.n_classes, mlp_ratio=cct_mlp_ratio, resnet=resnet)
+    # Backbone
+    if resnet == '50':
+      resnet = torchvision.models.resnet50(weights='IMAGENET1K_V2')
+      # self.linear = nn.Linear(2048, self.n_classes)
+      dim = 2048
+    elif resnet == '34':
+      resnet = torchvision.models.resnet34(weights='IMAGENET1K_V1')
+      # self.linear = nn.Linear(512, self.n_classes)
+      dim = 512
 
-    # Concept transformer
-    self.concept_transformer = ConceptTransformer(
-      n_concepts=self.n_concepts, dim=dim, n_classes=self.n_classes, num_heads=num_heads)
+    layers = list(resnet.children())[:-1] # Include Adaptive average maxpool (AdaptiveAvgPool2d)  
+    self.feature_extractor = nn.Sequential(*layers)
 
-  def forward(self, images):
+    # Concept Classifier
+    self.concept_classifier = nn.Sequential(
+      nn.Dropout(p=dropout),
+      nn.Linear(dim, dim),
+      nn.Dropout(p=dropout),
+      nn.ReLU(),
+      nn.Linear(dim, self.n_concepts)
+    )
+
+    # Class Classifier
+    self.class_classifier = nn.Sequential(
+      nn.Dropout(p=dropout),
+      nn.ReLU(),
+      nn.Linear(self.n_concepts, dim),
+      nn.Dropout(p=dropout),
+      nn.ReLU(),
+      nn.Linear(dim, self.n_classes)
+    )
+
+  def forward(self, x):
     """
     inputs:
       x - batch images
     """
 
-    patches = self.cct(images)
-    out, attn = self.concept_transformer(patches)
+    x = self.feature_extractor(x)
+    x = torch.flatten(x, 1)
+    pred_concept = self.concept_classifier(x)
 
-    return out, attn
+    pred_class = self.class_classifier(pred_concept)
+    
+    pred_concept = pred_concept.softmax(dim=-1) # In Concept Transformer, attn output also goes through softmax
+    return pred_class, pred_concept
 
 
-class CT_aPY(pl.LightningModule):
-  n_classes = 20 # TODO - considering only pascal dataset for now
+class CC_aPY(pl.LightningModule):
+  n_classes = 20 # TODO - considering only pascal data for now
 
   def __init__(self, args):
     super().__init__()
@@ -55,9 +80,7 @@ class CT_aPY(pl.LightningModule):
     self.args = args
     self.save_hyperparameters()
   
-    self.model = CT_aPY_torch(
-      dim=args.dim, cct_n_layers=args.cct_n_layers, cct_n_heads=args.cct_n_heads,
-      cct_mlp_ratio=args.cct_mlp_ratio, num_heads=args.num_heads, resnet=args.resnet)
+    self.model = CC_aPY_torch(resnet=args.resnet, dropout=args.dropout)
 
     class_counts = [183, 161, 254, 228, 296, 73, 528, 187, 446, 103, 113, 244, 153, 149, 2488, 225, 123, 121, 90, 150]
     class_counts = torch.tensor(class_counts)
@@ -69,7 +92,6 @@ class CT_aPY(pl.LightningModule):
     self.test_accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes, top_k=1)
 
     self.test_mode = 'last'
-    
 
   def training_step(self, batch, batch_idx):
     image, (target_class, target_concept) = batch
@@ -80,7 +102,6 @@ class CT_aPY(pl.LightningModule):
 
     # Accuracy
     self.train_accuracy(pred_class, target_class.int())
-    self.log('train_loss', loss)
     self.log('train_cls_loss', cls_loss)
     self.log('train_expl_loss', expl_loss, prog_bar=True)
     self.log('train_acc', self.train_accuracy, prog_bar=True)
@@ -96,9 +117,9 @@ class CT_aPY(pl.LightningModule):
 
     # Accuracy
     self.val_accuracy(pred_class, target_class.int())
-    self.log('val_cls_loss', cls_loss)
-    self.log('val_expl_loss', expl_loss)
     self.log('val_acc', self.val_accuracy, prog_bar=True)
+    self.log('val_cls_loss', cls_loss)
+    self.log('val_expl_loss', expl_loss, prog_bar=True)
     self.log('val_loss', loss)
 
   def test_step(self, batch, batch_idx):
@@ -137,15 +158,11 @@ class CT_aPY(pl.LightningModule):
 
     return image, target_class, target_concept, pred_class, attn
 
-  def loss_fn(self, target_class, target_concept, pred_class, attn):
+  def loss_fn(self, target_class, target_concept, pred_class, pred_concept):
     if self.args.loss_weight:
       cls_loss = F.cross_entropy(pred_class, target_class, weight=self.class_weight.cuda())
     else:
       cls_loss = F.cross_entropy(pred_class, target_class, weight=None)
-
-    # We are using multiple-head attention -> we need to average over them?
-    attn = attn.squeeze(2)
-    attn = torch.mean(attn, dim=1)
 
     # TODO - should we normalize the attentions to sum to 1 as they do in the paper?
     # attn went through softmax before, we need to account for that
@@ -153,7 +170,7 @@ class CT_aPY(pl.LightningModule):
     normalized_target_concept = (target_concept / norm)
     n_concepts = self.model.n_concepts
   
-    expl_loss = n_concepts*nn.functional.mse_loss(attn, normalized_target_concept)
+    expl_loss = n_concepts*nn.functional.mse_loss(pred_concept, normalized_target_concept)
   
     loss = cls_loss + self.args.expl_coeff*expl_loss
 
@@ -174,4 +191,3 @@ class CT_aPY(pl.LightningModule):
       scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer, T_0=self.args.warmup_epochs, verbose=True)
       return [optimizer], [{'scheduler': scheduler, 'interval': 'epoch'}]
-      
