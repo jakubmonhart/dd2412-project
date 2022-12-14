@@ -225,13 +225,16 @@ class CUB_dataset(VisionDataset):
 
     return {
       'image': image,
-      'global_context': expl,
-      'local_context': spatial_expl,
+      'global_attr': expl,
+      'spatial_attr': spatial_expl,
       'label': label
     }
 
   def __len__(self):
     return len(self.data)
+  
+  def get_n_labels(self):
+    return self.data['target'].max()
 
 
 
@@ -251,14 +254,21 @@ class CUB(LightningDataModule):
     self.batch_size = batch_size
     self.num_workers = num_workers
     self.val_size = val_size
+    
+
 
   
   
   def setup(self, stage=None):
     self.train = CUB_dataset(transform=self.train_transform, is_test=False)
     self.test = CUB_dataset(transform=self.test_transform, is_test=True)
+    self.n_labels = self.train.get_n_labels()
+    self.n_spatial_attr = self.train.num_local_attr
+    self.n_global_attr = self.train.num_global_attr
     val_size = int(self.val_size * len(self.train))
     self.train, self.val = random_split(self.train, lengths=[len(self.train) - val_size, val_size])
+    
+    
 
 
   def train_dataloader(self):
