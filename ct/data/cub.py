@@ -75,8 +75,8 @@ class CUB_dataset(VisionDataset):
       print('Dataset folder found. In order to download it, delete the existing folder!')
     else:
       print('Downloading CUB200-2011 Dataset')
-      download_and_extract_archive(self.url, self.root, self.root, self.folder_name+'.tgz')
-      os.remove(os.path.join(self.root, self.folder_name+'.tgz'))
+      download_and_extract_archive(self.url, self.root, self.root, self.folder_name+'.zip')
+      os.remove(os.path.join(self.root, self.folder_name+'.zip'))
       shutil.move(os.path.join(self.root, 'attributes.txt'), os.path.join(self.root, self.folder_name, 'attributes/attributes.txt'))
 
 
@@ -192,6 +192,9 @@ class CUB_dataset(VisionDataset):
     image_metadata = self.data.loc[index]
     image_attributes = self.image_attributes[self.image_attributes['image_id'] == image_metadata['image_id']]
     image = np.array(Image.open(os.path.join(self.image_folder, image_metadata['path']))) # Image is loaded as PIL
+    image_path = image_metadata['path']
+    if len(image.shape) == 2:
+      image = np.repeat(image[:, :, np.newaxis], 3, axis=-1)
     label = image_metadata.target - 1
     image_parts = self.parts.loc[image_metadata['image_id']].copy()
     if self.crop_images:
@@ -227,7 +230,8 @@ class CUB_dataset(VisionDataset):
       'image': image,
       'global_attr': expl,
       'spatial_attr': spatial_expl,
-      'label': label
+      'label': label,
+      'image_path': [image_path]
     }
 
   def __len__(self):
@@ -272,13 +276,13 @@ class CUB(LightningDataModule):
 
 
   def train_dataloader(self):
-    return DataLoader(self.train, batch_size=self.batch_size, num_workers=self.num_workers)
+    return DataLoader(self.train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
 
   def val_dataloader(self):
     return DataLoader(self.val, batch_size=self.batch_size, num_workers=self.num_workers)
 
   def test_dataloader(self):
-    return DataLoader(self.test, batch_size=self.batch_size, num_workers=self.num_workers)
+    return DataLoader(self.test, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
 
   
 

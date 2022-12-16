@@ -6,7 +6,7 @@ import torch.nn as nn
 class VIT_Backbone(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        vit = vit_l_16(weights=ViT_L_16_Weights.DEFAULT)
+        vit = vit_l_16(weights=ViT_L_16_Weights.DEFAULT).to('cuda' if torch.cuda.is_available() else 'cpu')
         self._process_input = vit._process_input
         self.class_token = vit.class_token
         self.encoder = vit.encoder
