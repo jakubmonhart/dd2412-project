@@ -35,14 +35,14 @@ class CrossAttention(nn.Module):
       x - output of backbone (processed image patches for all of our experiments?) Nx is usually num of visual patches
       y - concepts - Ny is number of concepts
     """
-  
+    # print(x.shape, y.shape, '\n\n')
     B, Nx, D = x.shape
     By, Ny, Dy = y.shape 
 
     assert By == 1 # We are using the same concept for each image in the batch, 
                    # batch dimension is broadcasted in attn computation 
+    
     assert D == Dy
-
     q = self.q(x).reshape(B, Nx, self.num_heads, D // self.num_heads).permute(0, 2, 1, 3) # [B, NH, Nx, DH]
     k = self.k(y).reshape(1, Ny, self.num_heads, D // self.num_heads).permute(0, 2, 1, 3) # [1, NH, Ny, DH]
     v = self.v(y).reshape(1, Ny, self.num_heads, D // self.num_heads).permute(0, 2, 1, 3) # [1, NH, Ny, DH]
